@@ -32,11 +32,18 @@ async fn handle_client(stream: TcpStream) -> Result<(), std::io::Error> {
 			}
 
 			let command = command.trim();
-
+			
 			match command {
 				"ping" => {
 					writer.write(b"+PONG\r\n").await?;
 					writer.flush().await?;					
+				}
+				"echo" => {
+					let prefix_size = read_line(&mut reader).await?;
+					let message = read_line(&mut reader).await?;
+					let response = format!("{}\r\n{}", prefix_size.trim(), message);
+					writer.write(response.as_bytes()).await?;
+					writer.flush().await?;
 				}
 				_ => println!("Unrecognized command: {}", command)
 			}
