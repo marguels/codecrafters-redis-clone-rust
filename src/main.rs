@@ -1,5 +1,5 @@
 use std::net::{TcpListener, TcpStream};
-use std::io::Write;
+use std::io::{Write, Read};
 
 fn main() {
     println!("Logs from your program will appear here!");
@@ -19,6 +19,24 @@ fn main() {
     }
 }
 
-fn handle_client(_stream: &mut TcpStream) {
-    _stream.write(b"+PONG\r\n").unwrap();
+fn handle_client(stream: &mut TcpStream) {
+    let mut command = [0u8; 1024];
+    while match stream.read(&mut command) {
+        Ok(_) => {
+            match stream.write("+PONG\r\n".as_bytes()) {
+                Ok(_) => {
+                    println!("Response sent");
+                    true
+                }
+                Err(e) => {
+                    println!("Failed to send response: {}", e);
+                    false
+                }
+            }
+        }
+        Err(_) => {
+            println!("An error occurred, terminating connection with {}", stream.peer_addr().unwrap());
+            false
+        }
+    } {}
 }
