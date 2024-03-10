@@ -1,42 +1,57 @@
-use std::net::{TcpListener, TcpStream};
-use std::io::{Write, Read};
+use tokio::{
+	io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter},
+	net::{TcpListener, TcpStream},
+	net::tcp::OwnedReadHalf,
+};
 
-fn main() {
-    println!("Logs from your program will appear here!");
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+	let listener = TcpListener::bind("127.0.0.1:6379").await?;
 
-    let listener = TcpListener::bind("127.0.0.1:6379").unwrap();
-    
-    for stream in listener.incoming() {
-        match stream {
-            Ok(mut _stream) => {
-                println!("accepted new connection");
-                handle_client(&mut _stream);
-            }
-            Err(e) => {
-                println!("error: {}", e);
-            }
-        }
-    }
+	loop {
+		let (stream, _) = listener.accept().await?;
+		tokio::spawn(async move {
+			if let Err(e) = handle_client(stream).await {
+				eprintln!("Error handling client: {}", e);
+			}
+		});
+	}
+
 }
 
-fn handle_client(stream: &mut TcpStream) {
-    let mut command = [0u8; 1024];
-    while match stream.read(&mut command) {
-        Ok(_) => {
-            match stream.write("+PONG\r\n".as_bytes()) {
-                Ok(_) => {
-                    println!("Response sent");
-                    true
-                }
-                Err(e) => {
-                    println!("Failed to send response: {}", e);
-                    false
-                }
-            }
-        }
-        Err(_) => {
-            println!("An error occurred, terminating connection with {}", stream.peer_addr().unwrap());
-            false
-        }
-    } {}
-}
+async fn handle_client(stream: TcpStream) -> Result<(), std::io::Error> {
+		let (rx, tx) = stream.into_split();
+
+		let mut reader = BufReader::new(rx);
+		let mut writer = BufWriter::new(tx);
+
+		loop {
+			let command = read_line(&mut reader).await?;
+			if command.is_empty() {
+				break;
+			}
+
+			let command = command.trim();
+
+			match command {
+				"ping" => {
+					writer.write(b"+PONG\r\n").await?;
+					writer.flush().await?;					
+				}
+				_ => println!("Unrecognized command: {}", command)
+			}
+		}
+
+		Ok(())
+	}
+
+	async fn read_line(stream: &mut BufReader<OwnedReadHalf>) -> Result<String, std::io::Error> {
+		let mut line = String::new();
+		match stream.read_line(&mut line).await {
+			Ok(_) => Ok(line),
+			Err(e) => {
+				eprintln!("Error reading line: {}", e);
+				Err(e)
+			}
+		}
+	}
