@@ -4,7 +4,7 @@ pub enum Command {
     Ping,
     Echo(String),
     Get(String),         // Key
-    Set(String, String), // Key, Value
+    Set(String, String, Option<u64>), // Key, Value, Expiry
     Unknown,
 }
 
@@ -24,18 +24,26 @@ impl Command {
                             }
                         },
                         "GET" if arr.len() >= 1 => {
-                            // Expect one argument for GET.
                             match arr.remove(0) {
                                 RESPType::BulkString(s) => Command::Get(s),
                                 _ => Command::Unknown,
                             }
                         },
                         "SET" if arr.len() >= 2 => {
-                            // Expect two arguments for SET.
                             let key = arr.remove(0);
                             let value = arr.remove(0);
+                            let mut expiry = None;
+                            while arr.len() >= 2 {
+                                match (arr.remove(0), arr.remove(0)) {
+                                    (RESPType::BulkString(s), RESPType::BulkString(value)) if s.to_uppercase() == "PX" => {
+                                        expiry = value.parse().ok();
+                                    }
+                                    _ => break,
+                                }
+                            }
+
                             match (key, value) {
-                                (RESPType::BulkString(k), RESPType::BulkString(v)) => Command::Set(k, v),
+                                (RESPType::BulkString(k), RESPType::BulkString(v)) => Command::Set(k, v, expiry),
                                 _ => Command::Unknown,
                             }
                         },

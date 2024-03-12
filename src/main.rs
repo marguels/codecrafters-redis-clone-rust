@@ -5,7 +5,7 @@ mod storage;
 use anyhow::{anyhow, Result};
 use redis_commands::Command;
 use resp_parser::{RESPParser, RESPType};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use storage::Storage;
 use tokio::{
     io::{AsyncWriteExt, BufReader, BufWriter},
@@ -72,7 +72,7 @@ async fn handle_client(
 				let value = storage.get(key);
 				match value {
 					Some(value) => {
-						let response = RESPType::BulkString(value.to_string()).serialize(); // Assign a value to response
+						let response = RESPType::BulkString(value.to_string()).serialize();
 						println!("Sending: {:?}", response);
 						writer.write(response.as_bytes()).await?;
 						writer.flush().await?;
@@ -87,9 +87,9 @@ async fn handle_client(
 					}
 				}
 			}
-			Command::Set(key, value) => {
+			Command::Set(key, value, expiry) => {
 				let mut storage = storage.write().await;
-				storage.set(key, value);
+				storage.set(key, value, expiry.map(Duration::from_millis));
 				writer.write_all(b"+OK\r\n").await?;
 				writer.flush().await?;
 			}
@@ -104,10 +104,10 @@ mod tests {
 	use tokio::io::{AsyncReadExt, AsyncWriteExt};
 	use tokio::net::{TcpListener, TcpStream};
 
-	async fn simulate_client(addr: std::net::SocketAddr) -> anyhow::Result<()> {
+	async fn simulate_client(addr: std::net::SocketAddr, message: &[u8] ) -> anyhow::Result<()> {
 		let mut stream = TcpStream::connect(addr).await?;
 	
-		stream.write_all(b"*1\r\n$4\r\nPING\r\n").await?;
+		stream.write_all(message).await?;
 		let mut buffer = [0; 1024];
 		let n = stream.read(&mut buffer).await?;
 	
@@ -134,8 +134,8 @@ mod tests {
 			}
 		});
 
-		let client_task1 = tokio::spawn(simulate_client(addr));
-		let client_task2 = tokio::spawn(simulate_client(addr));
+		let client_task1 = tokio::spawn(simulate_client(addr, b"*1\r\n$4\r\nPING\r\n"));
+		let client_task2 = tokio::spawn(simulate_client(addr, b"*1\r\n$4\r\nPING\r\n"));
 
 		let _ = tokio::try_join!(client_task1, client_task2)?;
 
@@ -143,4 +143,5 @@ mod tests {
 
 		Ok(())
 	}
+		
 }
