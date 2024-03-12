@@ -102,6 +102,12 @@ async fn handle_client(
 				writer.write_all(b"+OK\r\n").await?;
 				writer.flush().await?;
 			}
+			Command::Info => {
+				let response = RESPType::BulkString("role:master".to_string()).serialize();
+				println!("Sending: {:?}", response);
+				writer.write(response.as_bytes()).await?;
+				writer.flush().await?;
+			}
 			Command::Unknown => {}
 		}
 	}

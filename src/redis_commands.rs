@@ -5,6 +5,7 @@ pub enum Command {
     Echo(String),
     Get(String),         // Key
     Set(String, String, Option<u64>), // Key, Value, Expiry
+    Info,
     Unknown,
 }
 
@@ -47,6 +48,7 @@ impl Command {
                                 _ => Command::Unknown,
                             }
                         },
+                        "INFO" => Command::Info,
                         _ => Command::Unknown,
                     },
                     _ => Command::Unknown,
