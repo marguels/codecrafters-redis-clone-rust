@@ -12,12 +12,21 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::RwLock,
 };
+use clap::{arg, Parser};
 
 type ThreadSafeStorage = Arc<RwLock<Storage>>;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[arg(short, long, default_value = "6379")]
+    port: u64,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:6379").await?;
+	let args = Args::parse();
+	let address = format!("127.0.0.1:{}", args.port);
+    let listener = TcpListener::bind(&address).await?;
     let storage = Arc::new(RwLock::new(storage::Storage::new()));
 
     loop {
